@@ -34,8 +34,11 @@ app.post('/api/predict', async (req, res) => {
       mediaType = 'image/bmp';
     }
 
+    console.log('API キー:', process.env.VITE_ANTHROPIC_API_KEY ? '✅ 設定済み' : '❌ 未設定');
+    console.log('画像形式:', mediaType);
+
     const message = await client.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-opus-4-8',
       max_tokens: 1024,
       messages: [
         {
@@ -76,7 +79,7 @@ app.post('/api/predict', async (req, res) => {
       res.status(400).json({ error: '予想の解析に失敗しました' });
     }
   } catch (error) {
-    console.error('Error:', error);
+    console.error('❌ エラー詳細:', error);
     res.status(500).json({ error: error.message || '予測中にエラーが発生しました' });
   }
 });
