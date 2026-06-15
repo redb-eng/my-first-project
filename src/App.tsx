@@ -1,4 +1,6 @@
 import { useState, useRef } from 'react';
+import * as XLSX from 'xlsx';
+import { unzipSync } from 'fflate';
 
 interface Horse {
   number: number;
@@ -25,6 +27,7 @@ interface NotSelectedHorse {
 }
 
 interface Prediction {
+  raceName?: string;
   reasoning?: string;
   horses: Horse[];
   notSelected?: NotSelectedHorse[];
@@ -34,10 +37,111 @@ interface Prediction {
 
 function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const referenceFileRef = useRef<HTMLInputElement>(null);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  // 毎回AIに渡す参考情報（自分のルール等）。ブラウザに保存して次回も保持
+  const [referenceText, setReferenceText] = useState<string>(
+    () => localStorage.getItem('keibaReference') || ''
+  );
+
+  const saveReference = (text: string) => {
+    setReferenceText(text);
+    localStorage.setItem('keibaReference', text);
+  };
+
+  // メモ（Excelとは別に保持。読み込んでも消えない）
+  const [memo, setMemo] = useState<string>(() => localStorage.getItem('keibaMemo') || '');
+  const saveMemo = (text: string) => {
+    setMemo(text);
+    localStorage.setItem('keibaMemo', text);
+  };
+
+  // 参考写真（Excelから読み込んだ画像。ブラウザに保存して次回も保持）
+  const [referenceImages, setReferenceImages] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('keibaReferenceImages') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
+  const saveReferenceImages = (imgs: string[]) => {
+    setReferenceImages(imgs);
+    try {
+      localStorage.setItem('keibaReferenceImages', JSON.stringify(imgs));
+    } catch {
+      setError('参考写真が大きすぎて保存できませんでした（枚数を減らしてください）');
+    }
+  };
+
+  // Uint8Array → dataURL（画像）に変換
+  const bytesToDataUrl = (bytes: Uint8Array, mime: string): string => {
+    let binary = '';
+    const chunk = 8192;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    }
+    return `data:${mime};base64,${btoa(binary)}`;
+  };
+
+  // Excelファイルから「文章」と「埋め込み写真」の両方を読み取る
+  const handleReferenceFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const buf = e.target?.result as ArrayBuffer;
+        const data = new Uint8Array(buf);
+
+        // ① 文章（セルの中身）を読む
+        const wb = XLSX.read(data, { type: 'array' });
+        const parts: string[] = [];
+        wb.SheetNames.forEach((sheetName) => {
+          const csv = XLSX.utils.sheet_to_csv(wb.Sheets[sheetName]);
+          if (csv.trim()) parts.push(`【${sheetName}】\n${csv.trim()}`);
+        });
+        saveReference(parts.join('\n\n'));
+
+        // ② 埋め込み画像を読む（.xlsxはzip。xl/media/ の中に画像がある）
+        const imgs: string[] = [];
+        if (file.name.toLowerCase().endsWith('.xlsx')) {
+          try {
+            const files = unzipSync(data);
+            Object.keys(files)
+              .filter((p) => p.startsWith('xl/media/'))
+              .sort()
+              .forEach((p) => {
+                const ext = p.split('.').pop()?.toLowerCase();
+                const mime =
+                  ext === 'png' ? 'image/png'
+                  : ext === 'gif' ? 'image/gif'
+                  : ext === 'bmp' ? 'image/bmp'
+                  : 'image/jpeg';
+                imgs.push(bytesToDataUrl(files[p], mime));
+              });
+          } catch {
+            // 画像が無い/解凍できない場合は無視
+          }
+        }
+        saveReferenceImages(imgs);
+
+        if (parts.length === 0 && imgs.length === 0) {
+          setError('Excelから文章も画像も読み取れませんでした');
+        } else {
+          setError(null);
+        }
+      } catch {
+        setError('参考ファイルの読み込みに失敗しました');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
   const [prediction, setPrediction] = useState<Prediction | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 保存用の予想履歴（1予想 = 1シート）
+  const [history, setHistory] = useState<{ time: Date; pred: Prediction }[]>([]);
 
   // 画像を読み込み、長辺が maxSize を超えないよう縮小してJPEGのdataURLにする
   const resizeImage = (file: File, maxSize = 1500): Promise<string> => {
@@ -106,7 +210,10 @@ function App() {
     setError(null);
 
     try {
-      const imagesBase64 = selectedImages.map((img) => img.split(',')[1]);
+      // 参考写真（毎回固定）＋ 今回のスクショ をまとめて送る
+      const imagesBase64 = [...referenceImages, ...selectedImages].map(
+        (img) => img.split(',')[1]
+      );
 
       const response = await fetch('http://localhost:3001/api/predict', {
         method: 'POST',
@@ -115,6 +222,12 @@ function App() {
         },
         body: JSON.stringify({
           imagesBase64,
+          referenceInfo: [
+            referenceText && `■ Excelの情報\n${referenceText}`,
+            memo && `■ メモ\n${memo}`,
+          ]
+            .filter(Boolean)
+            .join('\n\n'),
         }),
       });
 
@@ -125,11 +238,103 @@ function App() {
 
       const prediction = await response.json();
       setPrediction(prediction);
+      setHistory((prev) => [...prev, { time: new Date(), pred: prediction }]);
     } catch (err) {
       setError(err instanceof Error ? err.message : '予期しないエラーが発生しました');
     } finally {
       setLoading(false);
     }
+  };
+
+  // 1予想を1シート分の表データ（配列の配列）に変換
+  const buildSheet = (pred: Prediction): (string | number)[][] => {
+    const aoa: (string | number)[][] = [];
+    aoa.push(['印', '馬番', '馬名', 'AI指数', '勝率(%)', '信頼度(%)', '血統評価', '期待値評価', '総合']);
+    pred.horses?.forEach((h, i) => {
+      const mark = ['◎', '○', '▲', '△', '×'][i] || '';
+      aoa.push([
+        mark, h.number, h.name, h.aiIndex ?? '', h.winRate ?? '', h.confidence,
+        h.bloodline ?? '', h.expectedValue ?? '', h.prediction,
+      ]);
+    });
+    aoa.push([]);
+    if (pred.notSelected && pred.notSelected.length > 0) {
+      aoa.push(['選ばなかった馬', '馬番', '馬名', '理由']);
+      pred.notSelected.forEach((h) => aoa.push(['', h.number, h.name, h.reason]));
+      aoa.push([]);
+    }
+    if (pred.bettingTickets && pred.bettingTickets.length > 0) {
+      aoa.push(['買い目', '券種', '買い目', '配分', '理由']);
+      pred.bettingTickets.forEach((t) => aoa.push(['', t.type, t.combo, t.stake ?? '', t.reason ?? '']));
+      aoa.push([]);
+    }
+    aoa.push(['馬券戦略', pred.bettingAdvice]);
+    if (pred.reasoning) aoa.push(['AIの分析・思考', pred.reasoning]);
+    return aoa;
+  };
+
+  const downloadExcel = async () => {
+    if (history.length === 0) return;
+
+    const wb = XLSX.utils.book_new();
+    const usedNames = new Set<string>();
+    history.forEach((item, i) => {
+      const t = item.time;
+      const hhmm = `${String(t.getMonth() + 1).padStart(2, '0')}${String(t.getDate()).padStart(2, '0')}_${String(t.getHours()).padStart(2, '0')}${String(t.getMinutes()).padStart(2, '0')}`;
+      // レース名があればそれを使う。なければ「予想N_日時」
+      const raw = item.pred.raceName?.trim();
+      // Excelのシート名で使えない記号を除去（: \ / ? * [ ]）
+      let base = raw ? raw.replace(/[:\\/?*[\]]/g, '') : `予想${i + 1}_${hhmm}`;
+      base = base.slice(0, 28) || `予想${i + 1}`;
+      // 重複したら連番を付ける
+      let name = base;
+      let n = 2;
+      while (usedNames.has(name)) {
+        name = `${base.slice(0, 28)}_${n}`.slice(0, 31);
+        n++;
+      }
+      usedNames.add(name);
+      const ws = XLSX.utils.aoa_to_sheet(buildSheet(item.pred));
+      XLSX.utils.book_append_sheet(wb, ws, name);
+    });
+
+    const arrayBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([arrayBuffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+
+    const now = new Date();
+    const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+    const suggestedName = `keiba_yosou_${stamp}.xlsx`;
+
+    // 対応ブラウザでは保存先を選ぶダイアログを出す
+    const picker = (window as unknown as {
+      showSaveFilePicker?: (opts: unknown) => Promise<{
+        createWritable: () => Promise<{ write: (b: Blob) => Promise<void>; close: () => Promise<void> }>;
+      }>;
+    }).showSaveFilePicker;
+
+    if (picker) {
+      try {
+        const handle = await picker({
+          suggestedName,
+          types: [{ description: 'Excel', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return;
+      } catch (e) {
+        if (e instanceof DOMException && e.name === 'AbortError') return;
+      }
+    }
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = suggestedName;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -153,6 +358,130 @@ function App() {
         <p style={{ textAlign: 'center', fontSize: '1.2em', color: '#b0b0b0', marginBottom: '40px' }}>
           競馬予想AIアプリ
         </p>
+
+        {/* 毎回AIに渡す参考情報 */}
+        <div style={{
+          background: 'rgba(52, 211, 153, 0.06)',
+          borderRadius: '12px',
+          padding: '20px 24px',
+          marginBottom: '24px',
+          border: '1px solid rgba(52, 211, 153, 0.25)',
+        }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#34d399' }}>
+            📌 毎回AIに見てほしい情報（自分のルール・重視ポイント）
+          </label>
+          <p style={{ margin: '0 0 12px 0', fontSize: '0.85em', color: '#9ca3af' }}>
+            情報はExcelに貼っておいて「読み込む」だけでOK。下のメモ欄は別で残ります。どちらも予想のたびに必ずAIへ渡され、ブラウザに保存されます。
+          </p>
+          <input
+            ref={referenceFileRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            onChange={handleReferenceFile}
+            style={{ display: 'none' }}
+          />
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}>
+            <button
+              onClick={() => referenceFileRef.current?.click()}
+              style={{
+                padding: '8px 16px',
+                background: 'rgba(52, 211, 153, 0.2)',
+                color: '#a7f3d0',
+                border: '1px solid rgba(52, 211, 153, 0.4)',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '0.9em',
+                fontWeight: '600',
+              }}
+            >
+              📁 Excel/CSVから読み込む
+            </button>
+            {referenceText && (
+              <button
+                onClick={() => saveReference('')}
+                style={{
+                  padding: '8px 16px',
+                  background: 'rgba(255,255,255,0.08)',
+                  color: '#cbd5e1',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '0.9em',
+                }}
+              >
+                クリア
+              </button>
+            )}
+          </div>
+          <label style={{ display: 'block', margin: '4px 0 6px', fontSize: '0.85em', color: '#a7f3d0' }}>
+            Excelから読み込んだ情報（直接編集も可）
+          </label>
+          <textarea
+            value={referenceText}
+            onChange={(e) => saveReference(e.target.value)}
+            placeholder="「📁 Excel/CSVから読み込む」を押すと、ここに内容が入ります。直接書いてもOK。"
+            rows={5}
+            style={{
+              width: '100%',
+              boxSizing: 'border-box',
+              background: 'rgba(0,0,0,0.25)',
+              color: '#e0e0e0',
+              border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: '8px',
+              padding: '12px',
+              fontSize: '0.95em',
+              fontFamily: 'inherit',
+              resize: 'vertical',
+            }}
+          />
+
+          <label style={{ display: 'block', margin: '16px 0 6px', fontSize: '0.85em', color: '#fcd34d' }}>
+            📝 メモ（その日の気づき・狙いなど。Excelを読み込んでも消えません）
+          </label>
+          <textarea
+            value={memo}
+            onChange={(e) => saveMemo(e.target.value)}
+            placeholder="例：&#10;・今日は馬場が重め、パワー型を上げる&#10;・3レースは荒れそうなので穴狙い"
+            rows={3}
+            style={{
+              width: '100%',
+              boxSizing: 'border-box',
+              background: 'rgba(0,0,0,0.25)',
+              color: '#e0e0e0',
+              border: '1px solid rgba(252,211,77,0.3)',
+              borderRadius: '8px',
+              padding: '12px',
+              fontSize: '0.95em',
+              fontFamily: 'inherit',
+              resize: 'vertical',
+            }}
+          />
+
+          {/* Excelから読み込んだ写真 */}
+          {referenceImages.length > 0 && (
+            <div style={{ marginTop: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85em', color: '#a7f3d0' }}>
+                🖼 Excelから読み込んだ写真（{referenceImages.length}枚・毎回AIへ渡します）
+              </label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                {referenceImages.map((img, index) => (
+                  <img
+                    key={index}
+                    src={img}
+                    alt={`参考写真 ${index + 1}`}
+                    style={{
+                      width: '100px',
+                      height: '100px',
+                      objectFit: 'cover',
+                      borderRadius: '8px',
+                      border: '2px solid rgba(52, 211, 153, 0.4)',
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         <div style={{
           background: 'rgba(255, 255, 255, 0.05)',
@@ -480,24 +809,41 @@ function App() {
               </p>
             </div>
 
-            <button
-              onClick={() => {
-                setSelectedImages([]);
-                setPrediction(null);
-                setError(null);
-              }}
-              style={{
-                padding: '10px 20px',
-                background: 'rgba(255, 255, 255, 0.1)',
-                color: '#e0e0e0',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '0.95em',
-              }}
-            >
-              ↺ 別の画像を分析
-            </button>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <button
+                onClick={downloadExcel}
+                style={{
+                  padding: '10px 20px',
+                  background: 'linear-gradient(135deg, #34d399 0%, #059669 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '0.95em',
+                  fontWeight: '600',
+                }}
+              >
+                📊 Excelに保存（{history.length}件をシートで保存）
+              </button>
+              <button
+                onClick={() => {
+                  setSelectedImages([]);
+                  setPrediction(null);
+                  setError(null);
+                }}
+                style={{
+                  padding: '10px 20px',
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  color: '#e0e0e0',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '0.95em',
+                }}
+              >
+                ↺ 別の画像を分析
+              </button>
+            </div>
           </div>
         )}
       </div>
