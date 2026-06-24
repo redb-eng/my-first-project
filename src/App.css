@@ -831,3 +831,84 @@ body {
   filter: brightness(1.08);
   transform: translateY(-1px);
 }
+
+/* ── Import UI ── */
+.custom-section-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.import-btn {
+  background: #fff;
+  color: #4f46e5;
+  border: 1.5px solid #c7c7cc;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.import-btn:hover {
+  border-color: #4f46e5;
+  background: #f5f3ff;
+}
+
+.import-hint {
+  font-size: 0.82rem;
+  color: #8e8e93;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: -4px;
+}
+
+.template-link {
+  background: none;
+  border: none;
+  color: #4f46e5;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.template-link:hover {
+  color: #3730a3;
+}
+
+.import-error-banner {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 10px;
+  padding: 12px 16px;
+  color: #dc2626;
+  font-size: 0.9rem;
+  font-weight: 600;
+  max-width: 90vw;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.import-error-banner button {
+  background: none;
+  border: none;
+  color: #dc2626;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+}

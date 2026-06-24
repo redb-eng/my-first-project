@@ -25,6 +25,7 @@ function App() {
   const [isCustom, setIsCustom] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [results, setResults] = useState<QuizResult[]>([]);
+  const [importError, setImportError] = useState<string | null>(null);
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>(loadCustomCategories);
   const [highScores, setHighScores] = useState<Record<string, number>>(() => {
     try {
@@ -106,19 +107,38 @@ function App() {
     setScreen('edit');
   };
 
+  const handleImported = (cat: CustomCategory) => {
+    setCustomCategories((prev) => {
+      const next = [...prev, cat];
+      saveCustomCategories(next);
+      return next;
+    });
+    setImportError(null);
+  };
+
   return (
     <div className="app">
       {screen === 'home' && (
-        <HomeScreen
-          categories={CATEGORIES}
-          customCategories={customCategories}
-          onStart={handleStart}
-          onCreateNew={() => { setEditingId(null); setScreen('create'); }}
-          onEditCustom={handleEditCustom}
-          onDeleteCustom={handleDeleteCustom}
-          highScores={highScores}
-          totalQuestions={totalQuestions}
-        />
+        <>
+          {importError && (
+            <div className="import-error-banner">
+              ファイル読み込みエラー：{importError}
+              <button onClick={() => setImportError(null)}>×</button>
+            </div>
+          )}
+          <HomeScreen
+            categories={CATEGORIES}
+            customCategories={customCategories}
+            onStart={handleStart}
+            onCreateNew={() => { setEditingId(null); setScreen('create'); }}
+            onEditCustom={handleEditCustom}
+            onDeleteCustom={handleDeleteCustom}
+            onImported={handleImported}
+            onImportError={setImportError}
+            highScores={highScores}
+            totalQuestions={totalQuestions}
+          />
+        </>
       )}
       {(screen === 'create' || screen === 'edit') && (
         <CreateScreen
