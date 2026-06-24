@@ -1,15 +1,31 @@
 import { useState, useEffect } from 'react';
-import type { Screen, QuizResult } from './types';
+import type { Screen, QuizResult, CustomCategory } from './types';
 import { CATEGORIES, getQuestionsByCategory } from './data/questions';
 import HomeScreen from './components/HomeScreen';
 import QuizScreen from './components/QuizScreen';
 import ResultScreen from './components/ResultScreen';
+import CreateScreen from './components/CreateScreen';
 import './App.css';
+
+function loadCustomCategories(): CustomCategory[] {
+  try {
+    return JSON.parse(localStorage.getItem('quizCustomCategories') || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomCategories(cats: CustomCategory[]) {
+  localStorage.setItem('quizCustomCategories', JSON.stringify(cats));
+}
 
 function App() {
   const [screen, setScreen] = useState<Screen>('home');
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [isCustom, setIsCustom] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [results, setResults] = useState<QuizResult[]>([]);
+  const [customCategories, setCustomCategories] = useState<CustomCategory[]>(loadCustomCategories);
   const [highScores, setHighScores] = useState<Record<string, number>>(() => {
     try {
       return JSON.parse(localStorage.getItem('quizHighScores') || '{}');
@@ -18,19 +34,32 @@ function App() {
     }
   });
 
-  const totalQuestions = Object.fromEntries(
-    CATEGORIES.map((c) => [c.name, getQuestionsByCategory(c.name).length])
-  );
-
-  const categoryInfo = CATEGORIES.find((c) => c.name === selectedCategory);
-  const currentQuestions = selectedCategory ? getQuestionsByCategory(selectedCategory) : [];
-
   useEffect(() => {
     localStorage.setItem('quizHighScores', JSON.stringify(highScores));
   }, [highScores]);
 
-  const handleStart = (category: string) => {
+  const totalQuestions = Object.fromEntries(
+    CATEGORIES.map((c) => [c.name, getQuestionsByCategory(c.name).length])
+  );
+
+  const currentQuestions = isCustom
+    ? (customCategories.find((c) => c.id === selectedCategory)?.questions ?? [])
+    : getQuestionsByCategory(selectedCategory);
+
+  const categoryInfo = isCustom
+    ? customCategories.find((c) => c.id === selectedCategory)
+    : CATEGORIES.find((c) => c.name === selectedCategory);
+
+  const categoryColor = categoryInfo?.color ?? '#4f46e5';
+  const categoryName = isCustom
+    ? (customCategories.find((c) => c.id === selectedCategory)?.name ?? '')
+    : selectedCategory;
+
+  const scoreKey = isCustom ? `custom:${selectedCategory}` : selectedCategory;
+
+  const handleStart = (category: string, custom = false) => {
     setSelectedCategory(category);
+    setIsCustom(custom);
     setResults([]);
     setScreen('quiz');
   };
@@ -39,10 +68,42 @@ function App() {
     setResults(quizResults);
     const score = quizResults.filter((r) => r.isCorrect).length;
     setHighScores((prev) => {
-      const best = prev[selectedCategory] ?? 0;
-      return score > best ? { ...prev, [selectedCategory]: score } : prev;
+      const best = prev[scoreKey] ?? 0;
+      return score > best ? { ...prev, [scoreKey]: score } : prev;
     });
     setScreen('result');
+  };
+
+  const handleSaveCustom = (cat: CustomCategory) => {
+    setCustomCategories((prev) => {
+      const exists = prev.find((c) => c.id === cat.id);
+      const next = exists
+        ? prev.map((c) => (c.id === cat.id ? cat : c))
+        : [...prev, cat];
+      saveCustomCategories(next);
+      return next;
+    });
+    setEditingId(null);
+    setScreen('home');
+  };
+
+  const handleDeleteCustom = (id: string) => {
+    if (!window.confirm('この問題セットを削除してもよいですか？')) return;
+    setCustomCategories((prev) => {
+      const next = prev.filter((c) => c.id !== id);
+      saveCustomCategories(next);
+      return next;
+    });
+    setHighScores((prev) => {
+      const next = { ...prev };
+      delete next[`custom:${id}`];
+      return next;
+    });
+  };
+
+  const handleEditCustom = (id: string) => {
+    setEditingId(id);
+    setScreen('edit');
   };
 
   return (
@@ -50,26 +111,37 @@ function App() {
       {screen === 'home' && (
         <HomeScreen
           categories={CATEGORIES}
+          customCategories={customCategories}
           onStart={handleStart}
+          onCreateNew={() => { setEditingId(null); setScreen('create'); }}
+          onEditCustom={handleEditCustom}
+          onDeleteCustom={handleDeleteCustom}
           highScores={highScores}
           totalQuestions={totalQuestions}
         />
       )}
-      {screen === 'quiz' && categoryInfo && (
+      {(screen === 'create' || screen === 'edit') && (
+        <CreateScreen
+          existing={editingId ? customCategories.find((c) => c.id === editingId) : undefined}
+          onSave={handleSaveCustom}
+          onCancel={() => setScreen('home')}
+        />
+      )}
+      {screen === 'quiz' && (
         <QuizScreen
           questions={currentQuestions}
-          category={selectedCategory}
-          categoryColor={categoryInfo.color}
+          category={categoryName}
+          categoryColor={categoryColor}
           onComplete={handleComplete}
           onQuit={() => setScreen('home')}
         />
       )}
-      {screen === 'result' && categoryInfo && (
+      {screen === 'result' && (
         <ResultScreen
           results={results}
-          category={selectedCategory}
-          categoryColor={categoryInfo.color}
-          onRetry={() => handleStart(selectedCategory)}
+          category={categoryName}
+          categoryColor={categoryColor}
+          onRetry={() => handleStart(selectedCategory, isCustom)}
           onHome={() => setScreen('home')}
         />
       )}

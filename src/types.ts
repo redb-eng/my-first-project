@@ -7,7 +7,16 @@ export interface Question {
   explanation: string;
 }
 
-export type Screen = 'home' | 'quiz' | 'result';
+export type Screen = 'home' | 'quiz' | 'result' | 'create' | 'edit';
+
+export interface CustomCategory {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  createdAt: number;
+  questions: Question[];
+}
 
 export interface QuizResult {
   question: Question;

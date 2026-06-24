@@ -507,3 +507,327 @@ body {
   background: #f0f0f5;
   color: #1d1d1f;
 }
+
+/* ── Home Screen additions ── */
+.section-heading {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #6e6e73;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin: 28px 0 12px;
+}
+
+.custom-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.create-new-btn {
+  background: #4f46e5;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+
+.create-new-btn:hover {
+  filter: brightness(1.1);
+}
+
+.empty-custom {
+  background: #fff;
+  border-radius: 16px;
+  padding: 36px 24px;
+  text-align: center;
+  color: #8e8e93;
+  border: 2px dashed #e5e5ea;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.create-new-btn-large {
+  background: #4f46e5;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 12px 24px;
+  font-size: 0.97rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+
+.create-new-btn-large:hover {
+  filter: brightness(1.1);
+}
+
+/* カスタムカテゴリカード */
+.custom-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.custom-card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 24px 20px 16px;
+  background: none;
+  border: none;
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+}
+
+.custom-card-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px 14px;
+  border-top: 1px solid #f0f0f5;
+}
+
+.edit-btn, .delete-btn {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+
+.edit-btn {
+  background: #f0f0f5;
+  color: #3d3d45;
+}
+
+.delete-btn {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.edit-btn:hover { filter: brightness(0.94); }
+.delete-btn:hover { filter: brightness(0.94); }
+
+/* ── Create Screen ── */
+.create-screen {
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 40px;
+}
+
+.create-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0 4px;
+}
+
+.create-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #1d1d1f;
+}
+
+.create-section {
+  background: #fff;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.question-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.section-label {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #6e6e73;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.field-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #3d3d45;
+  margin-top: 4px;
+}
+
+.text-input {
+  width: 100%;
+  border: 1.5px solid #e5e5ea;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: #1d1d1f;
+  background: #fafafa;
+  transition: border-color 0.15s;
+  outline: none;
+}
+
+.text-input:focus {
+  border-color: #4f46e5;
+  background: #fff;
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 64px;
+}
+
+.option-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.radio-input {
+  width: 18px;
+  height: 18px;
+  accent-color: #10b981;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.option-input-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: #f0f0f5;
+  border-radius: 50%;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #4a4a55;
+  flex-shrink: 0;
+}
+
+.option-text-input {
+  flex: 1;
+}
+
+.icon-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.icon-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background: #f0f0f5;
+  font-size: 1.3rem;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-btn-active {
+  border-color: #4f46e5;
+  background: #ede9fe;
+}
+
+.color-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.color-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s;
+}
+
+.color-btn:hover {
+  transform: scale(1.15);
+}
+
+.color-btn-active {
+  border-color: #1d1d1f;
+  transform: scale(1.1);
+}
+
+.remove-q-btn {
+  font-size: 0.82rem;
+  color: #dc2626;
+  background: #fef2f2;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.add-question-btn {
+  background: #fff;
+  border: 2px dashed #c7c7cc;
+  border-radius: 12px;
+  padding: 14px;
+  width: 100%;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #4f46e5;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.add-question-btn:hover {
+  background: #f5f3ff;
+  border-color: #4f46e5;
+}
+
+.create-error {
+  color: #dc2626;
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: #fef2f2;
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.save-btn {
+  display: block;
+  width: 100%;
+  padding: 15px;
+  border: none;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.1s;
+}
+
+.save-btn:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
