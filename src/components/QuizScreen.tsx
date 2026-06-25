@@ -1,13 +1,35 @@
 import { useState, useRef, useEffect } from 'react';
 import type { Question, QuizResult } from '../types';
 
+function stripSep(s: string) {
+  // 空白・カンマ・読点・中黒・スラッシュなどの区切りを除去
+  return s.replace(/[\s,、，.．・･/／]+/g, '');
+}
+
 function normalizeAnswer(s: string) {
-  return s.trim().toLowerCase().replace(/\s+/g, ' ');
+  return stripSep(s.trim().toLowerCase());
+}
+
+function isKatakanaSet(s: string) {
+  // 2文字以上のカタカナのみ（記号の組合せ回答用）
+  return /^[ァ-ヶー]{2,}$/.test(s);
 }
 
 function checkText(input: string, correctText: string): boolean {
   const n = normalizeAnswer(input);
-  return correctText.split('/').map(normalizeAnswer).includes(n);
+  return correctText.split('/').some((cand) => {
+    const c = normalizeAnswer(cand);
+    if (n === c) return true;
+    // 数値問題は数として等しければ正解（例: 400 と 400.0）
+    if (/^-?\d+(\.\d+)?$/.test(n) && /^-?\d+(\.\d+)?$/.test(c)) {
+      return Number(n) === Number(c);
+    }
+    // カタカナの記号を複数選ぶ問題は順不同で正解にする
+    if (isKatakanaSet(c) && isKatakanaSet(n) && n.length === c.length) {
+      return [...n].sort().join('') === [...c].sort().join('');
+    }
+    return false;
+  });
 }
 
 interface Props {
@@ -94,6 +116,9 @@ export default function QuizScreen({ questions, category, categoryColor, onCompl
           {isText ? '記述式' : '選択式'}
         </span>
         <p className="question-text">{current.question}</p>
+        {current.image && (
+          <img className="question-image" src={current.image} alt="問題の図" loading="lazy" />
+        )}
       </div>
 
       {isText ? (

@@ -5,6 +5,7 @@ export interface Question {
   category: string;
   type?: QuestionType; // default: 'choice'
   question: string;
+  image?: string; // 問題に表示する図のパス（public配下）
   // choice
   options: string[];
   correctIndex: number;
