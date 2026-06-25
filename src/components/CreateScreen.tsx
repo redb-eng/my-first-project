@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Question, CustomCategory } from '../types';
+import type { Question, CustomCategory, QuestionType } from '../types';
 
 const COLORS = [
   '#7c3aed', '#db2777', '#ea580c', '#16a34a',
@@ -9,14 +9,23 @@ const COLORS = [
 const ICONS = ['📚', '✏️', '🔬', '🎵', '🌱', '💻', '🏃', '🍳', '🗺️', '🎨'];
 
 interface DraftQuestion {
+  type: QuestionType;
   question: string;
   options: [string, string, string, string];
   correctIndex: number;
+  correctText: string;
   explanation: string;
 }
 
 function emptyDraft(): DraftQuestion {
-  return { question: '', options: ['', '', '', ''], correctIndex: 0, explanation: '' };
+  return {
+    type: 'choice',
+    question: '',
+    options: ['', '', '', ''],
+    correctIndex: 0,
+    correctText: '',
+    explanation: '',
+  };
 }
 
 interface Props {
@@ -32,9 +41,11 @@ export default function CreateScreen({ existing, onSave, onCancel }: Props) {
   const [drafts, setDrafts] = useState<DraftQuestion[]>(
     existing?.questions.length
       ? existing.questions.map((q) => ({
+          type: q.type ?? 'choice',
           question: q.question,
-          options: q.options as [string, string, string, string],
+          options: (q.options.length === 4 ? q.options : ['', '', '', '']) as [string, string, string, string],
           correctIndex: q.correctIndex,
+          correctText: q.correctText ?? '',
           explanation: q.explanation,
         }))
       : [emptyDraft()]
@@ -68,8 +79,15 @@ export default function CreateScreen({ existing, onSave, onCancel }: Props) {
     for (let i = 0; i < drafts.length; i++) {
       const d = drafts[i];
       if (!d.question.trim()) { setError(`問題 ${i + 1} の問題文が空です`); return; }
-      for (let j = 0; j < 4; j++) {
-        if (!d.options[j].trim()) { setError(`問題 ${i + 1} の選択肢 ${['A','B','C','D'][j]} が空です`); return; }
+      if (d.type === 'choice') {
+        for (let j = 0; j < 4; j++) {
+          if (!d.options[j].trim()) {
+            setError(`問題 ${i + 1} の選択肢 ${['A', 'B', 'C', 'D'][j]} が空です`);
+            return;
+          }
+        }
+      } else {
+        if (!d.correctText.trim()) { setError(`問題 ${i + 1} の正解を入力してください`); return; }
       }
     }
     setError('');
@@ -77,9 +95,11 @@ export default function CreateScreen({ existing, onSave, onCancel }: Props) {
     const questions: Question[] = drafts.map((d, i) => ({
       id: Date.now() + i,
       category: name.trim(),
+      type: d.type,
       question: d.question.trim(),
-      options: d.options.map((o) => o.trim()),
-      correctIndex: d.correctIndex,
+      options: d.type === 'choice' ? d.options.map((o) => o.trim()) : [],
+      correctIndex: d.type === 'choice' ? d.correctIndex : 0,
+      correctText: d.type === 'text' ? d.correctText.trim() : undefined,
       explanation: d.explanation.trim(),
     }));
 
@@ -148,6 +168,22 @@ export default function CreateScreen({ existing, onSave, onCancel }: Props) {
             )}
           </div>
 
+          {/* 形式切り替え */}
+          <div className="type-toggle">
+            <button
+              className={`type-toggle-btn ${d.type === 'choice' ? 'type-active' : ''}`}
+              onClick={() => updateDraft(qi, { type: 'choice' })}
+            >
+              選択式
+            </button>
+            <button
+              className={`type-toggle-btn ${d.type === 'text' ? 'type-active' : ''}`}
+              onClick={() => updateDraft(qi, { type: 'text' })}
+            >
+              記述式
+            </button>
+          </div>
+
           <label className="field-label">問題文</label>
           <textarea
             className="text-input textarea"
@@ -157,25 +193,40 @@ export default function CreateScreen({ existing, onSave, onCancel }: Props) {
             rows={3}
           />
 
-          <label className="field-label">選択肢（正解をラジオボタンで選択）</label>
-          {d.options.map((opt, oi) => (
-            <div key={oi} className="option-input-row">
+          {d.type === 'choice' ? (
+            <>
+              <label className="field-label">選択肢（正解をラジオボタンで選択）</label>
+              {d.options.map((opt, oi) => (
+                <div key={oi} className="option-input-row">
+                  <input
+                    type="radio"
+                    name={`correct-${qi}`}
+                    checked={d.correctIndex === oi}
+                    onChange={() => updateDraft(qi, { correctIndex: oi })}
+                    className="radio-input"
+                  />
+                  <span className="option-input-label">{['A', 'B', 'C', 'D'][oi]}</span>
+                  <input
+                    className="text-input option-text-input"
+                    value={opt}
+                    onChange={(e) => updateOption(qi, oi, e.target.value)}
+                    placeholder={`選択肢 ${['A', 'B', 'C', 'D'][oi]}`}
+                  />
+                </div>
+              ))}
+            </>
+          ) : (
+            <>
+              <label className="field-label">正解テキスト</label>
               <input
-                type="radio"
-                name={`correct-${qi}`}
-                checked={d.correctIndex === oi}
-                onChange={() => updateDraft(qi, { correctIndex: oi })}
-                className="radio-input"
+                className="text-input"
+                value={d.correctText}
+                onChange={(e) => updateDraft(qi, { correctText: e.target.value })}
+                placeholder="例：東京　※複数の正解は「/」で区切る（東京/Tokyo）"
               />
-              <span className="option-input-label">{['A', 'B', 'C', 'D'][oi]}</span>
-              <input
-                className="text-input option-text-input"
-                value={opt}
-                onChange={(e) => updateOption(qi, oi, e.target.value)}
-                placeholder={`選択肢 ${['A', 'B', 'C', 'D'][oi]}`}
-              />
-            </div>
-          ))}
+              <p className="field-hint">入力は大文字・小文字・前後の空白を無視して判定します</p>
+            </>
+          )}
 
           <label className="field-label">解説（任意）</label>
           <textarea

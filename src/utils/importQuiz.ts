@@ -1,4 +1,4 @@
-import type { CustomCategory } from '../types';
+import type { CustomCategory, QuestionType } from '../types';
 
 /** シンプルなCSVパーサー（クォート対応） */
 function parseCSVRows(text: string): string[][] {
@@ -49,39 +49,66 @@ function randomPick<T>(arr: T[]): T {
 /**
  * CSVから CustomCategory を生成する。
  *
- * 期待する列順（1行目がヘッダーなら自動スキップ）:
- *   問題文, 選択肢A, 選択肢B, 選択肢C, 選択肢D, 正解(A/B/C/D or 0-3), 解説(省略可)
+ * 列順（1行目がヘッダーなら自動スキップ）:
+ *   問題文, 選択肢A, 選択肢B, 選択肢C, 選択肢D, 正解, 解説(省略可), タイプ(choice/text・省略可)
+ *
+ * タイプが "text" の場合:
+ *   - 選択肢A〜D は空欄でもOK
+ *   - 正解列に正解テキストを入力（複数可の場合は "/" で区切る）
  */
 export function importFromCSV(text: string, fileName: string): CustomCategory {
   const rows = parseCSVRows(text);
   if (rows.length === 0) throw new Error('ファイルが空です');
 
-  // ヘッダー行の検出: 正解列が数値でも A/B/C/D でもなければヘッダーとみなす
+  // ヘッダー行の検出: 正解列(col5)が A/B/C/D or 0-3 でなく、かつタイプ列(col7)も 'choice'/'text' でなければヘッダー
   let dataRows = rows;
-  const firstCorrectCell = (rows[0][5] ?? '').trim().toUpperCase();
-  const isHeader = !['A','B','C','D','0','1','2','3'].includes(firstCorrectCell);
+  const firstCorrect = (rows[0][5] ?? '').trim().toUpperCase();
+  const firstType = (rows[0][7] ?? '').trim().toLowerCase();
+  const isHeader =
+    !['A','B','C','D','0','1','2','3'].includes(firstCorrect) &&
+    !['choice','text','選択式','記述式',''].includes(firstType);
   if (isHeader) dataRows = rows.slice(1);
 
   if (dataRows.length === 0) throw new Error('問題データが見つかりません（ヘッダーのみのファイルです）');
 
+  const catName = fileName.replace(/\.[^.]+$/, '');
+
   const questions = dataRows.map((cols, i) => {
     if (cols.length < 6) throw new Error(`${i + 1}行目: 列数が足りません（最低6列必要）`);
-    const [question, a, b, c, d, correct, explanation = ''] = cols;
+    const [question, a, b, c, d, correct, explanation = '', rawType = ''] = cols;
     if (!question) throw new Error(`${i + 1}行目: 問題文が空です`);
-    if (!a || !b || !c || !d) throw new Error(`${i + 1}行目: 選択肢が不足しています`);
-    return {
-      id: Date.now() + i,
-      category: fileName,
-      question,
-      options: [a, b, c, d],
-      correctIndex: toCorrectIndex(correct),
-      explanation,
-    };
+
+    const type: QuestionType = rawType.toLowerCase() === 'text' || rawType === '記述式' ? 'text' : 'choice';
+
+    if (type === 'text') {
+      if (!correct) throw new Error(`${i + 1}行目: 記述式の正解が空です`);
+      return {
+        id: Date.now() + i,
+        category: catName,
+        type,
+        question,
+        options: [] as string[],
+        correctIndex: 0,
+        correctText: correct,
+        explanation,
+      };
+    } else {
+      if (!a || !b || !c || !d) throw new Error(`${i + 1}行目: 選択肢が不足しています`);
+      return {
+        id: Date.now() + i,
+        category: catName,
+        type,
+        question,
+        options: [a, b, c, d],
+        correctIndex: toCorrectIndex(correct),
+        explanation,
+      };
+    }
   });
 
   return {
     id: `custom-${Date.now()}`,
-    name: fileName.replace(/\.[^.]+$/, ''),
+    name: catName,
     icon: randomPick(ICONS),
     color: randomPick(COLORS),
     createdAt: Date.now(),
@@ -92,20 +119,8 @@ export function importFromCSV(text: string, fileName: string): CustomCategory {
 /**
  * JSONから CustomCategory を生成する。
  *
- * 期待するスキーマ:
- * {
- *   "name": "カテゴリ名",
- *   "icon": "📚",        // 省略可
- *   "color": "#4f46e5",  // 省略可
- *   "questions": [
- *     {
- *       "question": "問題文",
- *       "options": ["A", "B", "C", "D"],
- *       "correctIndex": 0,   // 0〜3
- *       "explanation": "解説" // 省略可
- *     }
- *   ]
- * }
+ * 選択式: { question, options:[4個], correctIndex:0-3, explanation? }
+ * 記述式: { question, type:"text", correctText:"正解/別解", explanation? }
  */
 export function importFromJSON(text: string): CustomCategory {
   let data: unknown;
@@ -125,18 +140,37 @@ export function importFromJSON(text: string): CustomCategory {
     const qObj = q as Record<string, unknown>;
     if (typeof qObj.question !== 'string' || !qObj.question)
       throw new Error(`questions[${i}]: "question" が必要です`);
-    if (!Array.isArray(qObj.options) || qObj.options.length !== 4)
-      throw new Error(`questions[${i}]: "options" に4つの選択肢が必要です`);
-    if (typeof qObj.correctIndex !== 'number' || qObj.correctIndex < 0 || qObj.correctIndex > 3)
-      throw new Error(`questions[${i}]: "correctIndex" は 0〜3 の数値が必要です`);
-    return {
-      id: Date.now() + i,
-      category: obj.name as string,
-      question: qObj.question as string,
-      options: qObj.options as string[],
-      correctIndex: qObj.correctIndex as number,
-      explanation: typeof qObj.explanation === 'string' ? qObj.explanation : '',
-    };
+
+    const type: QuestionType = qObj.type === 'text' ? 'text' : 'choice';
+
+    if (type === 'text') {
+      if (typeof qObj.correctText !== 'string' || !qObj.correctText)
+        throw new Error(`questions[${i}]: 記述式には "correctText" が必要です`);
+      return {
+        id: Date.now() + i,
+        category: obj.name as string,
+        type,
+        question: qObj.question as string,
+        options: [] as string[],
+        correctIndex: 0,
+        correctText: qObj.correctText as string,
+        explanation: typeof qObj.explanation === 'string' ? qObj.explanation : '',
+      };
+    } else {
+      if (!Array.isArray(qObj.options) || qObj.options.length !== 4)
+        throw new Error(`questions[${i}]: 選択式には "options" に4つの選択肢が必要です`);
+      if (typeof qObj.correctIndex !== 'number' || qObj.correctIndex < 0 || qObj.correctIndex > 3)
+        throw new Error(`questions[${i}]: "correctIndex" は 0〜3 の数値が必要です`);
+      return {
+        id: Date.now() + i,
+        category: obj.name as string,
+        type,
+        question: qObj.question as string,
+        options: qObj.options as string[],
+        correctIndex: qObj.correctIndex as number,
+        explanation: typeof qObj.explanation === 'string' ? qObj.explanation : '',
+      };
+    }
   });
 
   return {
@@ -152,9 +186,10 @@ export function importFromJSON(text: string): CustomCategory {
 /** サンプルCSVテンプレートをダウンロードする */
 export function downloadCSVTemplate() {
   const csv = [
-    '問題文,選択肢A,選択肢B,選択肢C,選択肢D,正解(A/B/C/D),解説',
-    '日本の首都はどこですか？,東京,大阪,京都,札幌,A,東京は1869年から日本の首都です。',
-    '2 + 3 はいくつですか？,3,4,5,6,C,2 + 3 = 5 です。',
+    '問題文,選択肢A,選択肢B,選択肢C,選択肢D,正解(A-D / 正解テキスト),解説,タイプ(choice/text)',
+    '2 + 3 はいくつですか？,3,4,5,6,C,2 + 3 = 5 です。,choice',
+    '日本の首都はどこですか？,東京,大阪,京都,札幌,A,東京は1869年から日本の首都です。,choice',
+    '「ありがとう」を英語で書いてください。,,,,Thank you/thanks,,感謝を表すときに使います。,text',
   ].join('\r\n');
 
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });

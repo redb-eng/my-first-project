@@ -1,9 +1,15 @@
+export type QuestionType = 'choice' | 'text';
+
 export interface Question {
   id: number;
   category: string;
+  type?: QuestionType; // default: 'choice'
   question: string;
+  // choice
   options: string[];
   correctIndex: number;
+  // text — 正解テキスト。複数の許容回答は "/" で区切る
+  correctText?: string;
   explanation: string;
 }
 
@@ -20,7 +26,8 @@ export interface CustomCategory {
 
 export interface QuizResult {
   question: Question;
-  selectedIndex: number;
+  selectedIndex: number; // text問題は -1
+  selectedText?: string; // text問題のユーザー回答
   isCorrect: boolean;
 }
 

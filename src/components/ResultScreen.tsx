@@ -47,18 +47,40 @@ export default function ResultScreen({ results, category, categoryColor, onRetry
                 {r.isCorrect ? '正解' : '不正解'}
               </span>
             </div>
+            <div className="review-item-meta">
+              <span className="review-type-badge">
+                {r.question.type === 'text' ? '記述式' : '選択式'}
+              </span>
+            </div>
             <p className="review-question">{r.question.question}</p>
             {!r.isCorrect && (
               <div className="review-answers">
-                <p className="review-your-answer">
-                  あなたの答え：<span className="wrong-answer">{r.question.options[r.selectedIndex]}</span>
-                </p>
-                <p className="review-correct-answer">
-                  正解：<span className="correct-answer">{r.question.options[r.question.correctIndex]}</span>
-                </p>
+                {r.question.type === 'text' ? (
+                  <>
+                    <p className="review-your-answer">
+                      あなたの答え：<span className="wrong-answer">{r.selectedText || '（未回答）'}</span>
+                    </p>
+                    <p className="review-correct-answer">
+                      正解：<span className="correct-answer">
+                        {r.question.correctText?.split('/').join(' または ')}
+                      </span>
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="review-your-answer">
+                      あなたの答え：<span className="wrong-answer">{r.question.options[r.selectedIndex]}</span>
+                    </p>
+                    <p className="review-correct-answer">
+                      正解：<span className="correct-answer">{r.question.options[r.question.correctIndex]}</span>
+                    </p>
+                  </>
+                )}
               </div>
             )}
-            <p className="review-explanation">{r.question.explanation}</p>
+            {r.question.explanation && (
+              <p className="review-explanation">{r.question.explanation}</p>
+            )}
           </div>
         ))}
       </div>
