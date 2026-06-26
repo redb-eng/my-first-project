@@ -17,7 +17,7 @@ export const CATEGORIES: CategoryInfo[] = [
     name: '機械加工 R7 実技（計画立案）',
     icon: '📝',
     color: '#16a34a',
-    description: '令和7年度 数値制御フライス盤 1級・実技（計画立案等作業試験）40問',
+    description: '令和7年度 数値制御フライス盤 1級・実技（計画立案等作業試験）29問',
   },
   {
     name: '機械加工 R6 学科A（真偽法）',
@@ -47,7 +47,7 @@ export const CATEGORIES: CategoryInfo[] = [
     name: '機械加工 R5 実技（計画立案）',
     icon: '📐',
     color: '#db2777',
-    description: '令和5年度 数値制御フライス盤 1級・実技（計画立案等作業試験）25問',
+    description: '令和5年度 数値制御フライス盤 1級・実技（計画立案等作業試験）35問',
   },
   {
     name: '機械加工 R6 実技（計画立案）',
